@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Settings, Bot, User } from 'lucide-react';
+import { Send, Settings, Plus, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import { SettingsPanel } from './SettingsPanel';
+import { ChatHistory } from './ChatHistory';
 import { useToast } from '@/hooks/use-toast';
 
 export interface Message {
@@ -16,13 +17,27 @@ export interface Message {
   isStreaming?: boolean;
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter-api-key') || '');
-  const [selectedModel, setSelectedModel] = useState('anthropic/claude-3.5-sonnet');
+  const [selectedModel] = useState('qwen/qwen-2.5-72b-instruct');
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem('chat-sessions');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -33,6 +48,52 @@ export const ChatInterface = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem('chat-sessions', JSON.stringify(chatSessions));
+  }, [chatSessions]);
+
+  const createNewChat = () => {
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    setChatSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(newSession.id);
+    setMessages([]);
+  };
+
+  const loadChatSession = (sessionId: string) => {
+    const session = chatSessions.find(s => s.id === sessionId);
+    if (session) {
+      setCurrentSessionId(sessionId);
+      setMessages(session.messages);
+      setShowHistory(false);
+    }
+  };
+
+  const updateCurrentSession = (newMessages: Message[]) => {
+    if (!currentSessionId) return;
+    
+    setChatSessions(prev => prev.map(session => {
+      if (session.id === currentSessionId) {
+        const title = newMessages.length > 0 && newMessages[0].role === 'user' 
+          ? newMessages[0].content.slice(0, 50) + (newMessages[0].content.length > 50 ? '...' : '')
+          : 'New Chat';
+        
+        return {
+          ...session,
+          title,
+          messages: newMessages,
+          updatedAt: new Date()
+        };
+      }
+      return session;
+    }));
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -45,6 +106,11 @@ export const ChatInterface = () => {
       });
       setShowSettings(true);
       return;
+    }
+
+    // Create new session if none exists
+    if (!currentSessionId) {
+      createNewChat();
     }
 
     const userMessage: Message = {
@@ -62,11 +128,27 @@ export const ChatInterface = () => {
       isStreaming: true,
     };
 
-    setMessages(prev => [...prev, userMessage, assistantMessage]);
+    const newMessages = [...messages, userMessage, assistantMessage];
+    setMessages(newMessages);
     setInputValue('');
     setIsLoading(true);
 
     try {
+      const systemPrompt = `You are DevLoom, an advanced AI assistant created to help developers and tech enthusiasts. You are knowledgeable, friendly, and always eager to help with coding, technology, and creative solutions. 
+
+Key traits:
+- Provide clear, well-structured responses
+- Use proper formatting with code blocks when appropriate
+- Be concise but thorough in explanations
+- Show enthusiasm for helping with technical challenges
+- Always maintain a professional yet approachable tone
+
+When responding:
+- Use markdown formatting for better readability
+- Structure your responses with headers, lists, and code blocks when relevant
+- Provide practical examples when explaining concepts
+- Ask clarifying questions when needed`;
+
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -75,13 +157,17 @@ export const ChatInterface = () => {
         },
         body: JSON.stringify({
           model: selectedModel,
-          messages: [...messages, userMessage].map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: 'user', content: inputValue }
+          ],
           stream: true,
           temperature: 0.7,
-          max_tokens: 1000,
+          max_tokens: 2000,
         }),
       });
 
@@ -113,13 +199,12 @@ export const ChatInterface = () => {
                 
                 if (content) {
                   accumulatedContent += content;
-                  setMessages(prev => 
-                    prev.map(msg => 
-                      msg.id === assistantMessage.id 
-                        ? { ...msg, content: accumulatedContent }
-                        : msg
-                    )
+                  const updatedMessages = newMessages.map(msg => 
+                    msg.id === assistantMessage.id 
+                      ? { ...msg, content: accumulatedContent }
+                      : msg
                   );
+                  setMessages(updatedMessages);
                 }
               } catch (e) {
                 // Ignore parsing errors for incomplete chunks
@@ -128,25 +213,27 @@ export const ChatInterface = () => {
           }
         }
 
-        // Mark streaming as complete
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === assistantMessage.id 
-              ? { ...msg, isStreaming: false }
-              : msg
-          )
+        // Mark streaming as complete and update session
+        const finalMessages = newMessages.map(msg => 
+          msg.id === assistantMessage.id 
+            ? { ...msg, isStreaming: false }
+            : msg
         );
+        setMessages(finalMessages);
+        updateCurrentSession(finalMessages);
       }
     } catch (error) {
       console.error('Error:', error);
       toast({
         title: "Error",
-        description: "Failed to get response from AI. Please check your API key and try again.",
+        description: "Failed to get response from DevLoom. Please check your API key and try again.",
         variant: "destructive",
       });
       
       // Remove the failed assistant message
-      setMessages(prev => prev.filter(msg => msg.id !== assistantMessage.id));
+      const filteredMessages = newMessages.filter(msg => msg.id !== assistantMessage.id);
+      setMessages(filteredMessages);
+      updateCurrentSession(filteredMessages);
     } finally {
       setIsLoading(false);
     }
@@ -160,78 +247,134 @@ export const ChatInterface = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+    <div className="flex h-screen bg-[#0D1117] text-white">
+      {/* Sidebar */}
+      <div className="w-64 border-r border-gray-800 bg-[#161B22] flex flex-col">
         {/* Header */}
-        <div className="border-b bg-white/80 backdrop-blur-sm p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Bot className="w-5 h-5 text-white" />
-            </div>
+        <div className="p-4 border-b border-gray-800">
+          <div className="flex items-center gap-3 mb-4">
+            <img 
+              src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
+              alt="DevLoom AI" 
+              className="w-8 h-8 rounded-lg"
+            />
             <div>
-              <h1 className="font-semibold text-gray-900">AI Assistant</h1>
-              <p className="text-sm text-gray-500">Powered by OpenRouter</p>
+              <h1 className="font-semibold text-white">DevLoom AI</h1>
+              <p className="text-xs text-gray-400">Your AI Coding Assistant</p>
             </div>
           </div>
+          
           <Button
-            variant="ghost"
+            onClick={createNewChat}
+            className="w-full bg-[#238636] hover:bg-[#2ea043] text-white border-0"
             size="sm"
-            onClick={() => setShowSettings(!showSettings)}
-            className="hover:bg-gray-100"
           >
-            <Settings className="w-4 h-4" />
+            <Plus className="w-4 h-4 mr-2" />
+            New Chat
           </Button>
         </div>
 
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="max-w-4xl mx-auto space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Bot className="w-8 h-8 text-white" />
+        {/* Chat History */}
+        <ScrollArea className="flex-1 p-2">
+          <div className="space-y-1">
+            {chatSessions.map((session) => (
+              <button
+                key={session.id}
+                onClick={() => loadChatSession(session.id)}
+                className={`w-full text-left p-3 rounded-lg hover:bg-gray-800 transition-colors ${
+                  currentSessionId === session.id ? 'bg-gray-800' : ''
+                }`}
+              >
+                <div className="text-sm text-white truncate">{session.title}</div>
+                <div className="text-xs text-gray-400">
+                  {session.updatedAt.toLocaleDateString()}
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Welcome to your AI Assistant
-                </h3>
-                <p className="text-gray-500">
-                  Start a conversation by typing a message below
-                </p>
+              </button>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Settings Button */}
+        <div className="p-4 border-t border-gray-800">
+          <Button
+            variant="ghost"
+            onClick={() => setShowSettings(!showSettings)}
+            className="w-full text-gray-300 hover:text-white hover:bg-gray-800"
+            size="sm"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Messages Area */}
+        <ScrollArea className="flex-1">
+          <div className="max-w-4xl mx-auto">
+            {messages.length === 0 && (
+              <div className="flex items-center justify-center h-full min-h-[60vh]">
+                <div className="text-center">
+                  <img 
+                    src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
+                    alt="DevLoom AI" 
+                    className="w-16 h-16 rounded-full mx-auto mb-6"
+                  />
+                  <h2 className="text-2xl font-semibold text-white mb-2">
+                    Welcome to DevLoom AI
+                  </h2>
+                  <p className="text-gray-400 mb-6">
+                    Your intelligent coding companion powered by Qwen
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto text-sm">
+                    <div className="bg-gray-800 p-4 rounded-lg">
+                      <h3 className="font-medium text-white mb-2">Code Help</h3>
+                      <p className="text-gray-400">Get assistance with debugging, optimization, and best practices</p>
+                    </div>
+                    <div className="bg-gray-800 p-4 rounded-lg">
+                      <h3 className="font-medium text-white mb-2">Technical Guidance</h3>
+                      <p className="text-gray-400">Architecture advice, technology recommendations, and more</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
+            <div className="space-y-6 p-4">
+              {messages.map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+            </div>
             
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
         {/* Input Area */}
-        <div className="border-t bg-white/80 backdrop-blur-sm p-4">
+        <div className="border-t border-gray-800 p-4">
           <div className="max-w-4xl mx-auto">
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <Input
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Type your message..."
-                  disabled={isLoading}
-                  className="pr-12 bg-white border-gray-200 focus:border-blue-400 focus:ring-blue-400"
-                />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={isLoading || !inputValue.trim()}
-                  size="sm"
-                  className="absolute right-1 top-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
+            <div className="relative">
+              <Input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Message DevLoom AI..."
+                disabled={isLoading}
+                className="pr-12 bg-gray-800/50 border-gray-700 text-white placeholder-gray-400 focus:border-[#238636] focus:ring-[#238636]"
+              />
+              <Button
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputValue.trim()}
+                size="sm"
+                className="absolute right-2 top-2 bg-[#238636] hover:bg-[#2ea043] text-white"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
             </div>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              DevLoom AI can make mistakes. Consider checking important information.
+            </p>
           </div>
         </div>
       </div>
@@ -242,7 +385,7 @@ export const ChatInterface = () => {
           apiKey={apiKey}
           setApiKey={setApiKey}
           selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
+          setSelectedModel={() => {}} // Model is fixed to Qwen
           onClose={() => setShowSettings(false)}
         />
       )}
