@@ -1,13 +1,14 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Settings, Plus, History } from 'lucide-react';
+import { Send, Settings, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import { SettingsPanel } from './SettingsPanel';
-import { ChatHistory } from './ChatHistory';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { useApiKey } from '@/hooks/useApiKey';
+import { AuthPage } from './AuthPage';
 
 export interface Message {
   id: string;
@@ -26,13 +27,12 @@ export interface ChatSession {
 }
 
 export const ChatInterface = () => {
+  const { user, loading: authLoading } = useAuth();
+  const { apiKey } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('openrouter-api-key') || '');
-  const [selectedModel] = useState('qwen/qwen-2.5-72b-instruct');
   const [chatSessions, setChatSessions] = useState<ChatSession[]>(() => {
     const saved = localStorage.getItem('chat-sessions');
     return saved ? JSON.parse(saved) : [];
@@ -53,6 +53,19 @@ export const ChatInterface = () => {
     localStorage.setItem('chat-sessions', JSON.stringify(chatSessions));
   }, [chatSessions]);
 
+  // Show auth page if user is not authenticated
+  if (authLoading) {
+    return (
+      <div className="flex h-screen bg-[#0D1117] items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
   const createNewChat = () => {
     const newSession: ChatSession = {
       id: Date.now().toString(),
@@ -71,7 +84,6 @@ export const ChatInterface = () => {
     if (session) {
       setCurrentSessionId(sessionId);
       setMessages(session.messages);
-      setShowHistory(false);
     }
   };
 
@@ -156,7 +168,7 @@ When responding:
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: selectedModel,
+          model: 'qwen/qwen-2.5-72b-instruct',
           messages: [
             { role: 'system', content: systemPrompt },
             ...messages.map(msg => ({
@@ -381,13 +393,7 @@ When responding:
 
       {/* Settings Panel */}
       {showSettings && (
-        <SettingsPanel
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          selectedModel={selectedModel}
-          setSelectedModel={() => {}} // Model is fixed to Qwen
-          onClose={() => setShowSettings(false)}
-        />
+        <SettingsPanel onClose={() => setShowSettings(false)} />
       )}
     </div>
   );
