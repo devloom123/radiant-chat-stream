@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Settings, Plus } from 'lucide-react';
+import { Send, Settings, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -70,8 +70,11 @@ export const ChatInterface = () => {
   // Show auth page if user is not authenticated
   if (authLoading) {
     return (
-      <div className="flex h-screen bg-[#0D1117] items-center justify-center">
-        <div className="text-white">Loading...</div>
+      <div className="flex h-screen bg-gradient-to-br from-[#0D1117] via-[#161B22] to-[#0D1117] items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 border-2 border-[#238636] border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-white font-medium">Loading DevLoom AI...</div>
+        </div>
       </div>
     );
   }
@@ -123,16 +126,6 @@ export const ChatInterface = () => {
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
-    
-    if (!apiKey) {
-      toast({
-        title: "API Key Required",
-        description: "Please set your OpenRouter API key in settings.",
-        variant: "destructive",
-      });
-      setShowSettings(true);
-      return;
-    }
 
     // Create new session if none exists
     if (!currentSessionId) {
@@ -251,8 +244,8 @@ When responding:
     } catch (error) {
       console.error('Error:', error);
       toast({
-        title: "Error",
-        description: "Failed to get response from DevLoom. Please check your API key and try again.",
+        title: "Connection Error",
+        description: "Failed to connect to DevLoom AI. Please try again.",
         variant: "destructive",
       });
       
@@ -273,26 +266,32 @@ When responding:
   };
 
   return (
-    <div className="flex h-screen bg-[#0D1117] text-white">
+    <div className="flex h-screen bg-gradient-to-br from-[#0D1117] via-[#161B22] to-[#0D1117] text-white">
       {/* Sidebar */}
-      <div className="w-64 border-r border-gray-800 bg-[#161B22] flex flex-col">
+      <div className="w-72 border-r border-gray-800/50 bg-gradient-to-b from-[#161B22]/80 to-[#0D1117]/80 backdrop-blur-sm flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center gap-3 mb-4">
-            <img 
-              src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
-              alt="DevLoom AI" 
-              className="w-8 h-8 rounded-lg"
-            />
+        <div className="p-6 border-b border-gray-800/50">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="relative">
+              <img 
+                src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
+                alt="DevLoom AI" 
+                className="w-10 h-10 rounded-xl shadow-lg"
+              />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-[#161B22] animate-pulse"></div>
+            </div>
             <div>
-              <h1 className="font-semibold text-white">DevLoom AI</h1>
-              <p className="text-xs text-gray-400">Your AI Coding Assistant</p>
+              <h1 className="font-bold text-white text-lg">DevLoom AI</h1>
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Your AI Coding Assistant
+              </p>
             </div>
           </div>
           
           <Button
             onClick={createNewChat}
-            className="w-full bg-[#238636] hover:bg-[#2ea043] text-white border-0"
+            className="w-full bg-gradient-to-r from-[#238636] to-[#2ea043] hover:from-[#2ea043] hover:to-[#238636] text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
             size="sm"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -301,19 +300,23 @@ When responding:
         </div>
 
         {/* Chat History */}
-        <ScrollArea className="flex-1 p-2">
-          <div className="space-y-1">
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-2">
             {chatSessions.map((session) => (
               <button
                 key={session.id}
                 onClick={() => loadChatSession(session.id)}
-                className={`w-full text-left p-3 rounded-lg hover:bg-gray-800 transition-colors ${
-                  currentSessionId === session.id ? 'bg-gray-800' : ''
+                className={`w-full text-left p-4 rounded-xl hover:bg-gray-800/50 transition-all duration-200 border ${
+                  currentSessionId === session.id 
+                    ? 'bg-gradient-to-r from-[#238636]/20 to-[#2ea043]/20 border-[#238636]/30 shadow-md' 
+                    : 'border-transparent hover:border-gray-700/50'
                 }`}
               >
-                <div className="text-sm text-white truncate">{session.title}</div>
-                <div className="text-xs text-gray-400">
-                  {new Date(session.updatedAt).toLocaleDateString()}
+                <div className="text-sm text-white truncate font-medium mb-1">{session.title}</div>
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span>{session.messages.length} messages</span>
+                  <span>•</span>
+                  <span>{new Date(session.updatedAt).toLocaleDateString()}</span>
                 </div>
               </button>
             ))}
@@ -321,11 +324,11 @@ When responding:
         </ScrollArea>
 
         {/* Settings Button */}
-        <div className="p-4 border-t border-gray-800">
+        <div className="p-4 border-t border-gray-800/50">
           <Button
             variant="ghost"
             onClick={() => setShowSettings(!showSettings)}
-            className="w-full text-gray-300 hover:text-white hover:bg-gray-800"
+            className="w-full text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-xl transition-all duration-200"
             size="sm"
           >
             <Settings className="w-4 h-4 mr-2" />
@@ -342,24 +345,35 @@ When responding:
             {messages.length === 0 && (
               <div className="flex items-center justify-center h-full min-h-[60vh]">
                 <div className="text-center">
-                  <img 
-                    src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
-                    alt="DevLoom AI" 
-                    className="w-16 h-16 rounded-full mx-auto mb-6"
-                  />
-                  <h2 className="text-2xl font-semibold text-white mb-2">
+                  <div className="relative mb-8">
+                    <img 
+                      src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
+                      alt="DevLoom AI" 
+                      className="w-20 h-20 rounded-2xl mx-auto shadow-2xl"
+                    />
+                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-[#238636] to-[#2ea043] rounded-full flex items-center justify-center">
+                      <Sparkles className="w-3 h-3 text-white" />
+                    </div>
+                  </div>
+                  <h2 className="text-3xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                     Welcome to DevLoom AI
                   </h2>
-                  <p className="text-gray-400 mb-6">
-                    Your intelligent coding companion powered by Qwen
+                  <p className="text-gray-400 mb-8 text-lg">
+                    Your intelligent coding companion powered by advanced AI
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto text-sm">
-                    <div className="bg-gray-800 p-4 rounded-lg">
-                      <h3 className="font-medium text-white mb-2">Code Help</h3>
-                      <p className="text-gray-400">Get assistance with debugging, optimization, and best practices</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto text-sm">
+                    <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 p-6 rounded-2xl border border-gray-700/50 backdrop-blur-sm hover:border-[#238636]/30 transition-all duration-300">
+                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center mb-4">
+                        <span className="text-lg">🚀</span>
+                      </div>
+                      <h3 className="font-semibold text-white mb-2">Code Assistance</h3>
+                      <p className="text-gray-400">Get help with debugging, optimization, and best practices</p>
                     </div>
-                    <div className="bg-gray-800 p-4 rounded-lg">
-                      <h3 className="font-medium text-white mb-2">Technical Guidance</h3>
+                    <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 p-6 rounded-2xl border border-gray-700/50 backdrop-blur-sm hover:border-[#238636]/30 transition-all duration-300">
+                      <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-500 rounded-xl flex items-center justify-center mb-4">
+                        <span className="text-lg">💡</span>
+                      </div>
+                      <h3 className="font-semibold text-white mb-2">Technical Guidance</h3>
                       <p className="text-gray-400">Architecture advice, technology recommendations, and more</p>
                     </div>
                   </div>
@@ -367,7 +381,7 @@ When responding:
               </div>
             )}
             
-            <div className="space-y-6 p-4">
+            <div className="space-y-6 p-6">
               {messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))}
@@ -378,7 +392,7 @@ When responding:
         </ScrollArea>
 
         {/* Input Area */}
-        <div className="border-t border-gray-800 p-4">
+        <div className="border-t border-gray-800/50 p-6 bg-gradient-to-r from-[#161B22]/50 to-[#0D1117]/50 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto">
             <div className="relative">
               <Input
@@ -387,19 +401,19 @@ When responding:
                 onKeyPress={handleKeyPress}
                 placeholder="Message DevLoom AI..."
                 disabled={isLoading}
-                className="pr-12 bg-gray-800/50 border-gray-700 text-white placeholder-gray-400 focus:border-[#238636] focus:ring-[#238636]"
+                className="pr-14 h-12 bg-gray-800/50 border-gray-700/50 text-white placeholder-gray-400 focus:border-[#238636] focus:ring-[#238636] rounded-xl backdrop-blur-sm"
               />
               <Button
                 onClick={handleSendMessage}
                 disabled={isLoading || !inputValue.trim()}
                 size="sm"
-                className="absolute right-2 top-2 bg-[#238636] hover:bg-[#2ea043] text-white"
+                className="absolute right-2 top-2 bg-gradient-to-r from-[#238636] to-[#2ea043] hover:from-[#2ea043] hover:to-[#238636] text-white rounded-lg h-8 w-8 p-0 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 <Send className="w-4 h-4" />
               </Button>
             </div>
-            <p className="text-xs text-gray-500 mt-2 text-center">
-              DevLoom AI can make mistakes. Consider checking important information.
+            <p className="text-xs text-gray-500 mt-3 text-center">
+              DevLoom AI is powered by advanced language models and can make mistakes. Consider checking important information.
             </p>
           </div>
         </div>
