@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Settings, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,7 +36,20 @@ export const ChatInterface = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>(() => {
     const saved = localStorage.getItem('chat-sessions');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      const parsedSessions = JSON.parse(saved);
+      // Convert date strings back to Date objects
+      return parsedSessions.map((session: any) => ({
+        ...session,
+        createdAt: new Date(session.createdAt),
+        updatedAt: new Date(session.updatedAt),
+        messages: session.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }))
+      }));
+    }
+    return [];
   });
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -299,7 +313,7 @@ When responding:
               >
                 <div className="text-sm text-white truncate">{session.title}</div>
                 <div className="text-xs text-gray-400">
-                  {session.updatedAt.toLocaleDateString()}
+                  {new Date(session.updatedAt).toLocaleDateString()}
                 </div>
               </button>
             ))}
