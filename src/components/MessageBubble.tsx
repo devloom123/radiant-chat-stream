@@ -50,18 +50,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 <ReactMarkdown 
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    code: ({node, inline, className, children, ...props}) => {
-                      const match = /language-(\w+)/.exec(className || '');
-                      return !inline ? (
+                    code: (props) => {
+                      const { children, className, ...rest } = props;
+                      const isInline = !className;
+                      return isInline ? (
+                        <code className="bg-gray-700 px-1.5 py-0.5 rounded text-sm" {...rest}>
+                          {children}
+                        </code>
+                      ) : (
                         <pre className="bg-gray-900 p-4 rounded-lg overflow-x-auto my-2">
-                          <code className={className} {...props}>
+                          <code className={className} {...rest}>
                             {children}
                           </code>
                         </pre>
-                      ) : (
-                        <code className="bg-gray-700 px-1.5 py-0.5 rounded text-sm" {...props}>
-                          {children}
-                        </code>
                       );
                     },
                   }}
