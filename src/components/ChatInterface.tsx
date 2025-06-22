@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Settings, Plus, Sparkles, MessageCircle } from 'lucide-react';
+import { Send, Settings, Plus, Sparkles, MessageCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -111,6 +111,18 @@ export const ChatInterface = () => {
       setCurrentSessionId(sessionId);
       setMessages(session.messages);
     }
+  };
+
+  const deleteChat = (sessionId: string) => {
+    setChatSessions(prev => prev.filter(s => s.id !== sessionId));
+    if (currentSessionId === sessionId) {
+      setCurrentSessionId(null);
+      setMessages([]);
+    }
+    toast({
+      title: "Chat Deleted",
+      description: "The chat has been successfully deleted.",
+    });
   };
 
   const updateCurrentSession = (newMessages: Message[]) => {
@@ -240,9 +252,10 @@ When responding:
           }
         }
 
+        // Ensure the final message is properly saved without streaming flag
         const finalMessages = newMessages.map(msg => 
           msg.id === assistantMessage.id 
-            ? { ...msg, isStreaming: false }
+            ? { ...msg, content: accumulatedContent, isStreaming: false }
             : msg
         );
         setMessages(finalMessages);
@@ -319,27 +332,43 @@ When responding:
               </div>
             ) : (
               chatSessions.map((session, index) => (
-                <button
+                <div
                   key={session.id}
-                  onClick={() => loadChatSession(session.id)}
-                  className={`w-full text-left p-4 rounded-2xl hover:bg-white/5 transition-all duration-300 border group hover:border-white/20 hover:shadow-lg hover:scale-105 transform animate-fade-in ${
+                  className={`group relative w-full text-left p-4 rounded-2xl hover:bg-white/5 transition-all duration-300 border hover:border-white/20 hover:shadow-lg hover:scale-105 transform animate-fade-in ${
                     currentSessionId === session.id 
                       ? 'bg-gradient-to-r from-[#22C55E]/10 to-[#16A34A]/10 border-[#22C55E]/30 shadow-lg scale-105' 
                       : 'border-white/5 hover:border-white/20'
                   }`}
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <div className="text-sm text-white truncate font-semibold mb-2 group-hover:text-[#22C55E] transition-colors">
-                    {session.title}
+                  <div 
+                    onClick={() => loadChatSession(session.id)}
+                    className="cursor-pointer"
+                  >
+                    <div className="text-sm text-white truncate font-semibold mb-2 group-hover:text-[#22C55E] transition-colors">
+                      {session.title}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="bg-gray-800/50 px-2 py-1 rounded-lg">
+                        {session.messages.length} messages
+                      </span>
+                      <span>•</span>
+                      <span>{new Date(session.updatedAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-400">
-                    <span className="bg-gray-800/50 px-2 py-1 rounded-lg">
-                      {session.messages.length} messages
-                    </span>
-                    <span>•</span>
-                    <span>{new Date(session.updatedAt).toLocaleDateString()}</span>
-                  </div>
-                </button>
+                  
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteChat(session.id);
+                    }}
+                    variant="ghost"
+                    size="sm"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-300 text-gray-400 hover:text-red-400 hover:bg-red-400/10 p-2 h-8 w-8 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               ))
             )}
           </div>
