@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
-import { X, User, LogOut, Palette, Bell, Shield, Zap, Download, Trash, Moon, Sun } from 'lucide-react';
+import { X, User, LogOut, Palette, Bell, Shield, Zap, Download, Trash, Moon, Sun, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -14,9 +14,16 @@ interface SettingsPanelProps {
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
-  const [notifications, setNotifications] = useState(true);
+  const [notifications, setNotifications] = useState(() => {
+    return localStorage.getItem('devloom-notifications') === 'true';
+  });
   const [darkMode, setDarkMode] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem('devloom-sound') === 'true';
+  });
+  const [customInstructions, setCustomInstructions] = useState(() => {
+    return localStorage.getItem('devloom-instructions') || '';
+  });
 
   const handleSignOut = async () => {
     await signOut();
@@ -64,89 +71,123 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
 
   const handleNotificationToggle = (enabled: boolean) => {
     setNotifications(enabled);
-    if (enabled) {
-      // Request notification permission
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+    localStorage.setItem('devloom-notifications', enabled.toString());
+    if (enabled && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
     }
     toast({
-      title: notifications ? "Notifications Disabled" : "Notifications Enabled",
+      title: enabled ? "Notifications Enabled" : "Notifications Disabled",
       description: `Notifications have been ${enabled ? 'enabled' : 'disabled'}.`,
     });
   };
 
   const handleSoundToggle = (enabled: boolean) => {
     setSoundEnabled(enabled);
+    localStorage.setItem('devloom-sound', enabled.toString());
     if (enabled) {
-      // Play a test sound
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTq66hVFApGn+DyvmEcBDmP1PLFeSwFJnfH8N6QQAoUXrTq66hVFApGn+DyvmEcBDmP1PLFeSwFJnfH8N6QQAoUXrTq66hVFApGn+DyvmEcBDmP');
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj');
       audio.volume = 0.1;
       audio.play().catch(() => {});
     }
     toast({
-      title: soundEnabled ? "Sound Disabled" : "Sound Enabled",
+      title: enabled ? "Sound Enabled" : "Sound Disabled",
       description: `Sound notifications have been ${enabled ? 'enabled' : 'disabled'}.`,
     });
   };
 
+  const handleInstructionsSave = () => {
+    localStorage.setItem('devloom-instructions', customInstructions);
+    toast({
+      title: "Instructions Saved",
+      description: "Your custom instructions have been saved successfully.",
+    });
+  };
+
   return (
-    <div className="w-96 border-l bg-gradient-to-b from-[#1A1F2E]/95 to-[#0F1419]/95 border-white/10 backdrop-blur-xl animate-slide-in-right">
-      <div className="p-6 border-b border-white/10 flex items-center justify-between">
-        <h2 className="font-bold text-white text-xl bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-          Settings
-        </h2>
+    <div className="w-96 border-l bg-[#171717] border-gray-800 flex flex-col h-full">
+      <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+        <h2 className="font-bold text-white text-xl">Settings</h2>
         <Button 
           variant="ghost" 
           size="sm" 
           onClick={onClose} 
-          className="text-gray-400 hover:text-white hover:bg-white/10 rounded-xl w-10 h-10 p-0 transition-all duration-300 hover:scale-110"
+          className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg w-8 h-8 p-0"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </Button>
       </div>
       
-      <div className="p-6 space-y-6 max-h-[calc(100vh-100px)] overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* User Profile */}
-        <Card className="bg-gradient-to-r from-[#22C55E]/10 to-[#16A34A]/10 border-[#22C55E]/20 backdrop-blur-sm hover:border-[#22C55E]/40 transition-all duration-300 hover:shadow-lg hover:scale-105 transform rounded-2xl">
+        <Card className="bg-gray-800 border-gray-700">
           <CardHeader className="pb-4">
-            <CardTitle className="text-sm flex items-center gap-4 text-white">
-              <div className="w-12 h-12 bg-gradient-to-r from-[#22C55E] to-[#16A34A] rounded-2xl flex items-center justify-center shadow-lg ring-2 ring-[#22C55E]/20">
-                <User className="w-6 h-6 text-white" />
+            <CardTitle className="text-sm flex items-center gap-3 text-white">
+              <div className="w-10 h-10 bg-[#22C55E] rounded-xl flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
               </div>
               <div>
-                <div className="font-bold text-lg">Account</div>
+                <div className="font-bold">Account</div>
                 <div className="text-xs text-gray-400 font-normal">Manage your profile</div>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-4">
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm hover:bg-white/10 transition-all duration-300">
-                <p className="text-sm text-gray-300 mb-2 font-medium">Email Address</p>
-                <p className="text-sm text-white font-semibold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                  {user?.email}
-                </p>
+              <div className="p-3 bg-gray-900 rounded-lg">
+                <p className="text-sm text-gray-400 mb-1">Email Address</p>
+                <p className="text-sm text-white font-medium">{user?.email}</p>
               </div>
               <Button
                 onClick={handleSignOut}
                 variant="outline"
                 size="sm"
-                className="w-full text-gray-300 border-white/20 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 transition-all duration-300 rounded-2xl h-12 group"
+                className="w-full text-gray-300 border-gray-600 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400"
               >
-                <LogOut className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Sign Out</span>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Custom Instructions */}
+        <Card className="bg-gray-800 border-gray-700">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-sm flex items-center gap-3 text-white">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="font-bold">Custom Instructions</div>
+                <div className="text-xs text-gray-400 font-normal">Personalize AI responses</div>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-3">
+              <Textarea
+                placeholder="Tell the AI how you'd like it to respond. For example: 'Always provide code examples' or 'Focus on React development'..."
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                className="bg-gray-900 border-gray-700 text-white placeholder-gray-400 min-h-20"
+              />
+              <Button
+                onClick={handleInstructionsSave}
+                size="sm"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Save Instructions
               </Button>
             </div>
           </CardContent>
         </Card>
 
         {/* Appearance Settings */}
-        <Card className="bg-white/5 border-white/10 backdrop-blur-sm hover:border-purple-500/30 transition-all duration-300 hover:shadow-lg hover:scale-105 transform rounded-2xl">
+        <Card className="bg-gray-800 border-gray-700">
           <CardHeader className="pb-4">
-            <CardTitle className="text-sm flex items-center gap-4 text-white">
-              <div className="w-10 h-10 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center ring-2 ring-purple-500/20">
-                <Palette className="w-5 h-5 text-purple-400" />
+            <CardTitle className="text-sm flex items-center gap-3 text-white">
+              <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center">
+                <Palette className="w-5 h-5 text-white" />
               </div>
               <div>
                 <div className="font-bold">Appearance</div>
@@ -155,58 +196,47 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all duration-300">
-                <div className="flex items-center gap-3">
-                  {darkMode ? <Moon className="w-4 h-4 text-blue-400" /> : <Sun className="w-4 h-4 text-yellow-400" />}
-                  <div>
-                    <p className="text-sm text-white font-medium">Dark Mode</p>
-                    <p className="text-xs text-gray-400">Optimized for coding sessions</p>
-                  </div>
+            <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Moon className="w-4 h-4 text-blue-400" />
+                <div>
+                  <p className="text-sm text-white font-medium">Dark Mode</p>
+                  <p className="text-xs text-gray-400">Optimized for coding</p>
                 </div>
-                <Switch 
-                  checked={darkMode} 
-                  onCheckedChange={setDarkMode}
-                />
               </div>
+              <Switch checked={darkMode} onCheckedChange={setDarkMode} />
             </div>
           </CardContent>
         </Card>
 
         {/* Notifications */}
-        <Card className="bg-white/5 border-white/10 backdrop-blur-sm hover:border-blue-500/30 transition-all duration-300 hover:shadow-lg hover:scale-105 transform rounded-2xl">
+        <Card className="bg-gray-800 border-gray-700">
           <CardHeader className="pb-4">
-            <CardTitle className="text-sm flex items-center gap-4 text-white">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-2xl flex items-center justify-center ring-2 ring-blue-500/20">
-                <Bell className="w-5 h-5 text-blue-400" />
+            <CardTitle className="text-sm flex items-center gap-3 text-white">
+              <div className="w-10 h-10 bg-yellow-600 rounded-xl flex items-center justify-center">
+                <Bell className="w-5 h-5 text-white" />
               </div>
               <div>
                 <div className="font-bold">Notifications</div>
-                <div className="text-xs text-gray-400 font-normal">Manage alerts and updates</div>
+                <div className="text-xs text-gray-400 font-normal">Manage alerts</div>
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all duration-300">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
                 <div>
                   <p className="text-sm text-white font-medium">Response Alerts</p>
                   <p className="text-xs text-gray-400">Get notified when AI responds</p>
                 </div>
-                <Switch 
-                  checked={notifications} 
-                  onCheckedChange={handleNotificationToggle}
-                />
+                <Switch checked={notifications} onCheckedChange={handleNotificationToggle} />
               </div>
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all duration-300">
+              <div className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
                 <div>
                   <p className="text-sm text-white font-medium">Sound Effects</p>
                   <p className="text-xs text-gray-400">Play sounds for interactions</p>
                 </div>
-                <Switch 
-                  checked={soundEnabled} 
-                  onCheckedChange={handleSoundToggle}
-                />
+                <Switch checked={soundEnabled} onCheckedChange={handleSoundToggle} />
               </div>
             </div>
           </CardContent>
