@@ -76,6 +76,11 @@ export const ChatInterface = () => {
     resetTranscript,
   } = useSpeechRecognition();
 
+  // Add the missing scrollToBottom function
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   // Show loading animation for 5 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
