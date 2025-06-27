@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Settings, Plus, Sparkles, MessageCircle, Trash2, Mic, MicOff, Search, Menu, X } from 'lucide-react';
+import { Send, Settings, Plus, Sparkles, MessageCircle, Trash2, Mic, MicOff, Search, Menu, X, Keyboard, Download, Moon, Sun, Maximize, Minimize, BarChart3, BookOpen, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -8,10 +9,19 @@ import { SettingsPanel } from './SettingsPanel';
 import { LoadingAnimation } from './LoadingAnimation';
 import { FileUpload } from './FileUpload';
 import { PromptImprover } from './PromptImprover';
+import { KeyboardShortcuts } from './KeyboardShortcuts';
+import { ChatTemplates } from './ChatTemplates';
+import { MessageReactions } from './MessageReactions';
+import { VoiceActivityIndicator } from './VoiceActivityIndicator';
+import { TypingIndicator } from './TypingIndicator';
+import { ViewModeToggle } from './ViewModeToggle';
+import { ConversationStats } from './ConversationStats';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApiKey } from '@/hooks/useApiKey';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useAutoSave } from '@/hooks/useAutoSave';
 import { AuthPage } from './AuthPage';
 
 export interface Message {
@@ -20,6 +30,8 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: Date;
   isStreaming?: boolean;
+  reactions?: { [emoji: string]: number };
+  bookmarked?: boolean;
 }
 
 export interface ChatSession {
@@ -41,6 +53,14 @@ export const ChatInterface = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showLoadingAnimation, setShowLoadingAnimation] = useState(true);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [viewMode, setViewMode] = useState<'compact' | 'comfortable'>('comfortable');
+  const [showStats, setShowStats] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   
   const [chatSessions, setChatSessions] = useState<ChatSession[]>(() => {
     const saved = localStorage.getItem('chat-sessions');
@@ -76,9 +96,30 @@ export const ChatInterface = () => {
     resetTranscript,
   } = useSpeechRecognition();
 
-  // Add the missing scrollToBottom function
+  // Auto-save draft
+  useAutoSave(inputValue, (value) => {
+    if (value.trim()) {
+      localStorage.setItem('chat-draft', value);
+    } else {
+      localStorage.removeItem('chat-draft');
+    }
+  });
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNewChat: createNewChat,
+    onToggleSidebar: () => setShowSidebar(!showSidebar),
+    onToggleTheme: () => setDarkMode(!darkMode),
+    onShowShortcuts: () => setShowKeyboardShortcuts(true),
+    onSearch: () => document.getElementById('search-input')?.focus(),
+    onExport: handleExportData,
+    onFullScreen: toggleFullScreen,
+  });
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   // Show loading animation for 5 seconds
@@ -90,6 +131,14 @@ export const ChatInterface = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Load draft on mount
+  useEffect(() => {
+    const draft = localStorage.getItem('chat-draft');
+    if (draft) {
+      setInputValue(draft);
+    }
+  }, []);
+
   useEffect(() => {
     if (transcript) {
       setInputValue(prev => prev + transcript);
@@ -99,7 +148,7 @@ export const ChatInterface = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, autoScroll]);
 
   useEffect(() => {
     localStorage.setItem('chat-sessions', JSON.stringify(chatSessions));
@@ -130,7 +179,7 @@ export const ChatInterface = () => {
     return <AuthPage />;
   }
 
-  const createNewChat = () => {
+  function createNewChat() {
     const newSession: ChatSession = {
       id: Date.now().toString(),
       title: 'New Chat',
@@ -141,13 +190,15 @@ export const ChatInterface = () => {
     setChatSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
     setMessages([]);
-  };
+    setShowTemplates(true);
+  }
 
   const loadChatSession = (sessionId: string) => {
     const session = chatSessions.find(s => s.id === sessionId);
     if (session) {
       setCurrentSessionId(sessionId);
       setMessages(session.messages);
+      setShowTemplates(false);
     }
   };
 
@@ -156,6 +207,7 @@ export const ChatInterface = () => {
     if (currentSessionId === sessionId) {
       setCurrentSessionId(null);
       setMessages([]);
+      setShowTemplates(true);
     }
     toast({
       title: "Chat Deleted",
@@ -210,9 +262,13 @@ export const ChatInterface = () => {
     setInputValue('');
     setSelectedFiles([]);
     setIsLoading(true);
+    setIsTyping(true);
+    setShowTemplates(false);
+    localStorage.removeItem('chat-draft');
 
     try {
-      const systemPrompt = `You are DevLoom, an advanced AI assistant created to help developers and tech enthusiasts. You are knowledgeable, friendly, and always eager to help with coding, technology, and creative solutions.`;
+      const customInstructions = localStorage.getItem('devloom-instructions') || '';
+      const systemPrompt = `You are DevLoom, an advanced AI assistant created to help developers and tech enthusiasts. You are knowledgeable, friendly, and always eager to help with coding, technology, and creative solutions.${customInstructions ? '\n\nAdditional instructions: ' + customInstructions : ''}`;
 
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -285,6 +341,23 @@ export const ChatInterface = () => {
         );
         setMessages(finalMessages);
         updateCurrentSession(finalMessages);
+
+        // Show notification if enabled
+        if (localStorage.getItem('devloom-notifications') === 'true' && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            new Notification('DevLoom AI', {
+              body: 'New response received',
+              icon: '/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png'
+            });
+          }
+        }
+
+        // Play sound if enabled
+        if (localStorage.getItem('devloom-sound') === 'true') {
+          const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj');
+          audio.volume = 0.1;
+          audio.play().catch(() => {});
+        }
       }
     } catch (error) {
       console.error('Error:', error);
@@ -299,6 +372,7 @@ export const ChatInterface = () => {
       updateCurrentSession(filteredMessages);
     } finally {
       setIsLoading(false);
+      setIsTyping(false);
     }
   };
 
@@ -309,18 +383,59 @@ export const ChatInterface = () => {
     }
   };
 
+  const handleReactToMessage = (messageId: string, emoji: string) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        const reactions = { ...msg.reactions };
+        reactions[emoji] = (reactions[emoji] || 0) + 1;
+        return { ...msg, reactions };
+      }
+      return msg;
+    }));
+  };
+
+  const handleExportData = () => {
+    const chatSessions = localStorage.getItem('chat-sessions');
+    if (chatSessions) {
+      const blob = new Blob([chatSessions], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `devloom-chat-history-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Export Complete",
+        description: "Your chat history has been exported successfully.",
+      });
+    }
+  };
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullScreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullScreen(false);
+    }
+  };
+
   const filteredSessions = chatSessions.filter(session =>
     session.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="flex h-screen bg-[#0F0F0F] text-white overflow-hidden">
+    <div className={`flex h-screen ${darkMode ? 'bg-[#0F0F0F] text-white' : 'bg-white text-black'} overflow-hidden transition-colors duration-300`}>
       {/* Sidebar */}
-      <div className={`${showSidebar ? 'w-80' : 'w-0'} transition-all duration-300 border-r border-gray-800 bg-[#171717] flex flex-col overflow-hidden`}>
+      <div className={`${showSidebar ? 'w-80' : 'w-0'} transition-all duration-300 border-r ${darkMode ? 'border-gray-800 bg-[#171717]' : 'border-gray-200 bg-gray-50'} flex flex-col overflow-hidden`}>
         {showSidebar && (
           <>
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-800">
+            <div className={`p-4 border-b ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <img 
@@ -328,38 +443,63 @@ export const ChatInterface = () => {
                     alt="DevLoom AI" 
                     className="w-8 h-8 rounded-lg"
                   />
-                  <span className="font-semibold text-white">DevLoom AI</span>
+                  <span className={`font-semibold ${darkMode ? 'text-white' : 'text-black'}`}>DevLoom AI</span>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSidebar(false)}
-                  className="text-gray-400 hover:text-white h-8 w-8 p-0"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowStats(!showStats)}
+                    className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'} h-8 w-8 p-0`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSidebar(false)}
+                    className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'} h-8 w-8 p-0`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               
               <Button
                 onClick={createNewChat}
-                className="w-full bg-white text-black hover:bg-gray-200 font-medium rounded-lg h-10"
+                className={`w-full ${darkMode ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'} font-medium rounded-lg h-10 transition-colors duration-200`}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 New chat
               </Button>
             </div>
 
+            {showStats && (
+              <div className="p-4 border-b border-gray-800">
+                <ConversationStats 
+                  sessions={chatSessions} 
+                  currentSessionId={currentSessionId} 
+                />
+              </div>
+            )}
+
             {/* Search */}
-            <div className="p-4 border-b border-gray-800">
+            <div className={`p-4 border-b ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${darkMode ? 'text-gray-400' : 'text-gray-500'} w-4 h-4`} />
                 <Input
+                  id="search-input"
                   placeholder="Search chats..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 rounded-lg"
+                  className={`pl-10 ${darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-black placeholder-gray-500'} rounded-lg`}
                 />
               </div>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="p-4 border-b border-gray-800">
+              <ViewModeToggle viewMode={viewMode} onToggle={setViewMode} />
             </div>
 
             {/* Chat History */}
@@ -370,15 +510,17 @@ export const ChatInterface = () => {
                     key={session.id}
                     className={`group relative flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition-colors ${
                       currentSessionId === session.id ? 'bg-gray-800' : ''
-                    }`}
+                    } ${viewMode === 'compact' ? 'py-2' : 'py-3'}`}
                     onClick={() => loadChatSession(session.id)}
                   >
-                    <MessageCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <MessageCircle className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'} flex-shrink-0`} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white truncate">{session.title}</div>
-                      <div className="text-xs text-gray-400">
-                        {new Date(session.updatedAt).toLocaleDateString()}
-                      </div>
+                      <div className={`text-sm ${darkMode ? 'text-white' : 'text-black'} truncate`}>{session.title}</div>
+                      {viewMode === 'comfortable' && (
+                        <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {new Date(session.updatedAt).toLocaleDateString()}
+                        </div>
+                      )}
                     </div>
                     <Button
                       onClick={(e) => {
@@ -387,7 +529,7 @@ export const ChatInterface = () => {
                       }}
                       variant="ghost"
                       size="sm"
-                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 h-6 w-6 p-0"
+                      className={`opacity-0 group-hover:opacity-100 ${darkMode ? 'text-gray-400 hover:text-red-400' : 'text-gray-500 hover:text-red-500'} h-6 w-6 p-0`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -397,11 +539,35 @@ export const ChatInterface = () => {
             </ScrollArea>
 
             {/* Settings */}
-            <div className="p-4 border-t border-gray-800">
+            <div className={`p-4 border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowKeyboardShortcuts(true)}
+                  className={`flex-1 justify-start ${darkMode ? 'text-gray-300 hover:text-white hover:bg-gray-800' : 'text-gray-600 hover:text-black hover:bg-gray-100'} rounded-lg h-10`}
+                >
+                  <Keyboard className="w-4 h-4 mr-3" />
+                  Shortcuts
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={toggleFullScreen}
+                  className={`${darkMode ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-600 hover:text-black hover:bg-gray-100'} h-10 w-10 p-0`}
+                >
+                  {isFullScreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setDarkMode(!darkMode)}
+                  className={`${darkMode ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-600 hover:text-black hover:bg-gray-100'} h-10 w-10 p-0`}
+                >
+                  {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </Button>
+              </div>
               <Button
                 variant="ghost"
                 onClick={() => setShowSettings(true)}
-                className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg h-10"
+                className={`w-full justify-start ${darkMode ? 'text-gray-300 hover:text-white hover:bg-gray-800' : 'text-gray-600 hover:text-black hover:bg-gray-100'} rounded-lg h-10`}
               >
                 <Settings className="w-4 h-4 mr-3" />
                 Settings
@@ -414,21 +580,40 @@ export const ChatInterface = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-[#171717]">
+        <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-800 bg-[#171717]' : 'border-gray-200 bg-gray-50'}`}>
           {!showSidebar && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowSidebar(true)}
-              className="text-gray-400 hover:text-white h-8 w-8 p-0"
+              className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'} h-8 w-8 p-0`}
             >
               <Menu className="w-4 h-4" />
             </Button>
           )}
           <div className="text-center flex-1">
-            <h1 className="text-lg font-semibold text-white">DevLoom AI</h1>
+            <h1 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-black'}`}>DevLoom AI</h1>
           </div>
-          <div className="w-8"></div>
+          <div className="flex items-center gap-2">
+            {!autoScroll && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={scrollToBottom}
+                className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'} h-8 w-8 p-0`}
+              >
+                <ArrowDown className="w-4 h-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAutoScroll(!autoScroll)}
+              className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'} h-8 px-3`}
+            >
+              Auto-scroll {autoScroll ? 'ON' : 'OFF'}
+            </Button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -436,56 +621,87 @@ export const ChatInterface = () => {
           <div className="max-w-4xl mx-auto px-4 py-8">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[60vh] text-center">
-                <div className="mb-8">
-                  <img 
-                    src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
-                    alt="DevLoom AI" 
-                    className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-lg"
-                  />
-                  <h2 className="text-3xl font-bold text-white mb-2">How can I help you today?</h2>
-                  <p className="text-gray-400 mb-8">Start a conversation with your AI assistant</p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-                  {[
-                    { title: "Code Review", desc: "Help me review and improve my code", icon: "💻" },
-                    { title: "Debug Issues", desc: "Find and fix bugs in my application", icon: "🐛" },
-                    { title: "Architecture", desc: "Design system architecture", icon: "🏗️" },
-                    { title: "Best Practices", desc: "Learn coding best practices", icon: "⭐" },
-                  ].map((suggestion, index) => (
-                    <div
-                      key={index}
-                      className="p-4 bg-gray-800 rounded-xl hover:bg-gray-700 cursor-pointer transition-colors border border-gray-700"
-                      onClick={() => setInputValue(suggestion.desc)}
-                    >
-                      <div className="text-2xl mb-2">{suggestion.icon}</div>
-                      <div className="font-medium text-white mb-1">{suggestion.title}</div>
-                      <div className="text-sm text-gray-400">{suggestion.desc}</div>
+                {showTemplates ? (
+                  <div className="w-full">
+                    <div className="mb-8">
+                      <img 
+                        src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
+                        alt="DevLoom AI" 
+                        className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-lg"
+                      />
+                      <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-black'} mb-2`}>Choose a template to get started</h2>
+                      <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-8`}>Or start typing your own message</p>
                     </div>
-                  ))}
-                </div>
+                    <ChatTemplates onSelectTemplate={(template) => {
+                      setInputValue(template);
+                      setShowTemplates(false);
+                    }} />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-8">
+                      <img 
+                        src="/lovable-uploads/7a0c30ed-fbe4-42c1-abce-64a0a528fabf.png" 
+                        alt="DevLoom AI" 
+                        className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-lg"
+                      />
+                      <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-black'} mb-2`}>How can I help you today?</h2>
+                      <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-8`}>Start a conversation with your AI assistant</p>
+                      <Button
+                        onClick={() => setShowTemplates(true)}
+                        variant="outline"
+                        className={`${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Browse Templates
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className={`space-y-${viewMode === 'compact' ? '4' : '6'}`}>
                 {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+                  <div key={message.id}>
+                    <MessageBubble message={message} viewMode={viewMode} darkMode={darkMode} />
+                    {message.role === 'assistant' && !message.isStreaming && (
+                      <div className="mt-2 ml-12">
+                        <MessageReactions
+                          messageId={message.id}
+                          reactions={message.reactions}
+                          onReact={handleReactToMessage}
+                        />
+                      </div>
+                    )}
+                  </div>
                 ))}
+                <TypingIndicator isVisible={isTyping} />
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
+        {/* Voice Activity Indicator */}
+        {isListening && (
+          <div className="px-4 py-2">
+            <div className="max-w-4xl mx-auto">
+              <VoiceActivityIndicator isActive={isListening} />
+            </div>
+          </div>
+        )}
+
         {/* Input Area */}
-        <div className="p-4 border-t border-gray-800 bg-[#171717]">
+        <div className={`p-4 border-t ${darkMode ? 'border-gray-800 bg-[#171717]' : 'border-gray-200 bg-gray-50'}`}>
           <div className="max-w-4xl mx-auto">
-            <div className="relative flex items-end gap-3 p-3 bg-gray-800 rounded-2xl border border-gray-700 focus-within:border-gray-600">
+            <div className={`relative flex items-end gap-3 p-3 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'} rounded-2xl border focus-within:border-gray-600`}>
               <FileUpload
                 onFileSelect={(files) => setSelectedFiles(prev => [...prev, ...files])}
                 selectedFiles={selectedFiles}
                 onRemoveFile={(index) => {
                   setSelectedFiles(prev => prev.filter((_, i) => i !== index));
                 }}
+                darkMode={darkMode}
               />
               
               <div className="flex-1">
@@ -495,7 +711,7 @@ export const ChatInterface = () => {
                   onKeyPress={handleKeyPress}
                   placeholder="Message DevLoom AI..."
                   disabled={isLoading}
-                  className="border-0 bg-transparent text-white placeholder-gray-400 focus:ring-0 p-0 text-base resize-none"
+                  className={`border-0 bg-transparent ${darkMode ? 'text-white placeholder-gray-400' : 'text-black placeholder-gray-500'} focus:ring-0 p-0 text-base resize-none`}
                   style={{ boxShadow: 'none' }}
                 />
               </div>
@@ -504,6 +720,7 @@ export const ChatInterface = () => {
                 <PromptImprover
                   originalPrompt={inputValue}
                   onImprovedPrompt={setInputValue}
+                  darkMode={darkMode}
                 />
 
                 {speechSupported && (
@@ -515,7 +732,7 @@ export const ChatInterface = () => {
                     className={`h-8 w-8 p-0 rounded-lg transition-all duration-200 ${
                       isListening 
                         ? 'text-red-400 bg-red-400/10' 
-                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                        : `${darkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-black hover:bg-black/10'}`
                     }`}
                   >
                     {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -525,7 +742,7 @@ export const ChatInterface = () => {
                 <Button
                   onClick={handleSendMessage}
                   disabled={isLoading || (!inputValue.trim() && selectedFiles.length === 0)}
-                  className="bg-white text-black hover:bg-gray-200 disabled:opacity-50 h-8 w-8 p-0 rounded-lg"
+                  className={`${darkMode ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'} disabled:opacity-50 h-8 w-8 p-0 rounded-lg transition-colors duration-200`}
                 >
                   <Send className="w-4 h-4" />
                 </Button>
@@ -537,8 +754,14 @@ export const ChatInterface = () => {
 
       {/* Settings Panel */}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel onClose={() => setShowSettings(false)} darkMode={darkMode} />
       )}
+
+      {/* Keyboard Shortcuts Dialog */}
+      <KeyboardShortcuts
+        isOpen={showKeyboardShortcuts}
+        onClose={() => setShowKeyboardShortcuts(false)}
+      />
     </div>
   );
 };
