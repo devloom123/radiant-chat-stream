@@ -15,6 +15,7 @@ import { VoiceActivityIndicator } from './VoiceActivityIndicator';
 import { TypingIndicator } from './TypingIndicator';
 import { ViewModeToggle } from './ViewModeToggle';
 import { ConversationStats } from './ConversationStats';
+import { ApiKeySetup } from './ApiKeySetup';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApiKey } from '@/hooks/useApiKey';
@@ -43,7 +44,7 @@ export interface ChatSession {
 
 export const ChatInterface = () => {
   const { user, loading: authLoading } = useAuth();
-  const { apiKey } = useApiKey();
+  const { apiKey, loading: apiKeyLoading } = useApiKey();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -202,7 +203,7 @@ export const ChatInterface = () => {
     return <LoadingAnimation />;
   }
 
-  if (authLoading) {
+  if (authLoading || apiKeyLoading) {
     return (
       <div className="flex h-screen bg-gradient-to-br from-[#0A0E1A] via-[#1A1F2E] to-[#0F1419] items-center justify-center">
         <div className="flex flex-col items-center gap-6">
@@ -221,6 +222,14 @@ export const ChatInterface = () => {
 
   if (!user) {
     return <AuthPage />;
+  }
+
+  if (!apiKey) {
+    return (
+      <div className={`flex h-screen ${darkMode ? 'bg-[#0F0F0F] text-white' : 'bg-white text-black'} items-center justify-center`}>
+        <ApiKeySetup darkMode={darkMode} />
+      </div>
+    );
   }
 
   const loadChatSession = (sessionId: string) => {
@@ -268,6 +277,15 @@ export const ChatInterface = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim() && selectedFiles.length === 0) return;
 
+    if (!apiKey) {
+      toast({
+        title: "API Key Required",
+        description: "Please setup your OpenRouter API key first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!currentSessionId) {
       createNewChat();
     }
@@ -300,11 +318,15 @@ export const ChatInterface = () => {
       const customInstructions = localStorage.getItem('devloom-instructions') || '';
       const systemPrompt = `You are DevLoom, an advanced AI assistant created to help developers and tech enthusiasts. You are knowledgeable, friendly, and always eager to help with coding, technology, and creative solutions.${customInstructions ? '\n\nAdditional instructions: ' + customInstructions : ''}`;
 
+      console.log('Making request to OpenRouter with API key:', apiKey.substring(0, 20) + '...');
+
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'DevLoom AI'
         },
         body: JSON.stringify({
           model: 'qwen/qwen-2.5-72b-instruct',
@@ -322,8 +344,21 @@ export const ChatInterface = () => {
         }),
       });
 
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', errorData);
+        
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your OpenRouter API key.');
+        } else if (response.status === 402) {
+          throw new Error('Insufficient credits. Please check your OpenRouter account balance.');
+        } else if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        } else {
+          throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+        }
       }
 
       const reader = response.body?.getReader();
@@ -391,9 +426,11 @@ export const ChatInterface = () => {
       }
     } catch (error) {
       console.error('Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect to DevLoom AI. Please try again.';
+      
       toast({
         title: "Connection Error",
-        description: "Failed to connect to DevLoom AI. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
       

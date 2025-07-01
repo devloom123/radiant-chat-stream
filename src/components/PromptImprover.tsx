@@ -25,11 +25,15 @@ export const PromptImprover: React.FC<PromptImproverProps> = ({
 
     setIsImproving(true);
     try {
+      console.log('Improving prompt with API key:', apiKey.substring(0, 20) + '...');
+
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'DevLoom AI - Prompt Improver'
         },
         body: JSON.stringify({
           model: 'qwen/qwen-2.5-72b-instruct',
@@ -59,7 +63,16 @@ Return only the improved prompt, nothing else.`
       });
 
       if (!response.ok) {
-        throw new Error('Failed to improve prompt');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', errorData);
+        
+        if (response.status === 401) {
+          throw new Error('Invalid API key');
+        } else if (response.status === 402) {
+          throw new Error('Insufficient credits');
+        } else {
+          throw new Error('Failed to improve prompt');
+        }
       }
 
       const data = await response.json();
@@ -74,9 +87,11 @@ Return only the improved prompt, nothing else.`
       }
     } catch (error) {
       console.error('Error improving prompt:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Could not improve the prompt. Please try again.';
+      
       toast({
         title: "Improvement Failed",
-        description: "Could not improve the prompt. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -90,9 +105,9 @@ Return only the improved prompt, nothing else.`
       variant="ghost"
       size="sm"
       onClick={improvePrompt}
-      disabled={isImproving || !originalPrompt.trim()}
+      disabled={isImproving || !originalPrompt.trim() || !apiKey}
       className={`${darkMode ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-400/10' : 'text-purple-600 hover:text-purple-700 hover:bg-purple-100'} p-2 h-8 w-8 rounded-lg transition-all duration-200 disabled:opacity-50`}
-      title="Improve prompt"
+      title={!apiKey ? "API key required" : "Improve prompt"}
     >
       {isImproving ? (
         <Loader2 className="w-4 h-4 animate-spin" />
