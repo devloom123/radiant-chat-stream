@@ -7,12 +7,14 @@ interface FileUploadProps {
   onFileSelect: (files: File[]) => void;
   selectedFiles: File[];
   onRemoveFile: (index: number) => void;
+  darkMode?: boolean;
 }
 
 export const FileUpload: React.FC<FileUploadProps> = ({
   onFileSelect,
   selectedFiles,
   onRemoveFile,
+  darkMode = true,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -52,7 +54,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         variant="ghost"
         size="sm"
         onClick={() => fileInputRef.current?.click()}
-        className="text-gray-400 hover:text-white hover:bg-white/10 p-2 h-8 w-8 rounded-lg transition-all duration-200"
+        className={`${darkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-black hover:bg-black/10'} p-2 h-8 w-8 rounded-lg transition-all duration-200`}
       >
         <Paperclip className="w-4 h-4" />
       </Button>
@@ -67,17 +69,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       />
 
       {selectedFiles.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-2 bg-[#2A2F3E] border border-white/10 rounded-xl p-3 shadow-xl backdrop-blur-sm min-w-64">
+        <div className={`absolute bottom-full left-0 mb-2 ${darkMode ? 'bg-[#2A2F3E] border-white/10' : 'bg-white border-gray-300'} border rounded-xl p-3 shadow-xl backdrop-blur-sm min-w-64`}>
           <div className="space-y-2">
             {selectedFiles.map((file, index) => (
               <div
                 key={index}
-                className="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                className={`flex items-center gap-3 p-2 ${darkMode ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'} rounded-lg border transition-colors`}
               >
                 {getFileIcon(file)}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{file.name}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className={`text-sm ${darkMode ? 'text-white' : 'text-black'} truncate`}>{file.name}</p>
+                  <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     {(file.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
@@ -86,7 +88,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={() => onRemoveFile(index)}
-                  className="text-gray-400 hover:text-red-400 p-1 h-6 w-6"
+                  className={`${darkMode ? 'text-gray-400 hover:text-red-400' : 'text-gray-600 hover:text-red-600'} p-1 h-6 w-6`}
                 >
                   <X className="w-3 h-3" />
                 </Button>

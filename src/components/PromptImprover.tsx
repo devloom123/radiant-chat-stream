@@ -8,11 +8,13 @@ import { useApiKey } from '@/hooks/useApiKey';
 interface PromptImproverProps {
   originalPrompt: string;
   onImprovedPrompt: (improvedPrompt: string) => void;
+  darkMode?: boolean;
 }
 
 export const PromptImprover: React.FC<PromptImproverProps> = ({
   originalPrompt,
   onImprovedPrompt,
+  darkMode = true,
 }) => {
   const [isImproving, setIsImproving] = useState(false);
   const { toast } = useToast();
@@ -89,7 +91,7 @@ Return only the improved prompt, nothing else.`
       size="sm"
       onClick={improvePrompt}
       disabled={isImproving || !originalPrompt.trim()}
-      className="text-purple-400 hover:text-purple-300 hover:bg-purple-400/10 p-2 h-8 w-8 rounded-lg transition-all duration-200 disabled:opacity-50"
+      className={`${darkMode ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-400/10' : 'text-purple-600 hover:text-purple-700 hover:bg-purple-100'} p-2 h-8 w-8 rounded-lg transition-all duration-200 disabled:opacity-50`}
       title="Improve prompt"
     >
       {isImproving ? (

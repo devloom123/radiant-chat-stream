@@ -9,12 +9,14 @@ interface MessageActionsProps {
   content: string;
   messageId: string;
   onReaction?: (messageId: string, reaction: 'like' | 'dislike') => void;
+  darkMode?: boolean;
 }
 
 export const MessageActions: React.FC<MessageActionsProps> = ({
   content,
   messageId,
   onReaction,
+  darkMode = true,
 }) => {
   const { toast } = useToast();
   const { speak, stop, isSpeaking } = useSpeechSynthesis();
@@ -64,7 +66,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         className={`h-8 w-8 p-0 rounded-lg transition-all duration-200 ${
           reaction === 'like' 
             ? 'text-green-400 bg-green-400/10 hover:bg-green-400/20' 
-            : 'text-gray-400 hover:text-green-400 hover:bg-green-400/10'
+            : `${darkMode ? 'text-gray-400 hover:text-green-400 hover:bg-green-400/10' : 'text-gray-600 hover:text-green-600 hover:bg-green-100'}`
         }`}
       >
         <ThumbsUp className="w-4 h-4" />
@@ -77,7 +79,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         className={`h-8 w-8 p-0 rounded-lg transition-all duration-200 ${
           reaction === 'dislike' 
             ? 'text-red-400 bg-red-400/10 hover:bg-red-400/20' 
-            : 'text-gray-400 hover:text-red-400 hover:bg-red-400/10'
+            : `${darkMode ? 'text-gray-400 hover:text-red-400 hover:bg-red-400/10' : 'text-gray-600 hover:text-red-600 hover:bg-red-100'}`
         }`}
       >
         <ThumbsDown className="w-4 h-4" />
@@ -87,7 +89,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         variant="ghost"
         size="sm"
         onClick={handleCopy}
-        className="h-8 w-8 p-0 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all duration-200"
+        className={`h-8 w-8 p-0 rounded-lg transition-all duration-200 ${darkMode ? 'text-gray-400 hover:text-blue-400 hover:bg-blue-400/10' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-100'}`}
       >
         <Copy className="w-4 h-4" />
       </Button>
@@ -99,7 +101,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         className={`h-8 w-8 p-0 rounded-lg transition-all duration-200 ${
           isSpeaking 
             ? 'text-purple-400 bg-purple-400/10 hover:bg-purple-400/20' 
-            : 'text-gray-400 hover:text-purple-400 hover:bg-purple-400/10'
+            : `${darkMode ? 'text-gray-400 hover:text-purple-400 hover:bg-purple-400/10' : 'text-gray-600 hover:text-purple-600 hover:bg-purple-100'}`
         }`}
       >
         {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Settings, Plus, Sparkles, MessageCircle, Trash2, Mic, MicOff, Search, Menu, X, Keyboard, Download, Moon, Sun, Maximize, Minimize, BarChart3, BookOpen, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -96,6 +95,57 @@ export const ChatInterface = () => {
     resetTranscript,
   } = useSpeechRecognition();
 
+  // Function declarations moved here before usage
+  function createNewChat() {
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    setChatSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(newSession.id);
+    setMessages([]);
+    setShowTemplates(true);
+  }
+
+  const handleExportData = () => {
+    const chatSessions = localStorage.getItem('chat-sessions');
+    if (chatSessions) {
+      const blob = new Blob([chatSessions], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `devloom-chat-history-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Export Complete",
+        description: "Your chat history has been exported successfully.",
+      });
+    }
+  };
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullScreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullScreen(false);
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   // Auto-save draft
   useAutoSave(inputValue, (value) => {
     if (value.trim()) {
@@ -115,12 +165,6 @@ export const ChatInterface = () => {
     onExport: handleExportData,
     onFullScreen: toggleFullScreen,
   });
-
-  const scrollToBottom = () => {
-    if (autoScroll) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
 
   // Show loading animation for 5 seconds
   useEffect(() => {
@@ -177,20 +221,6 @@ export const ChatInterface = () => {
 
   if (!user) {
     return <AuthPage />;
-  }
-
-  function createNewChat() {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: 'New Chat',
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setChatSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSession.id);
-    setMessages([]);
-    setShowTemplates(true);
   }
 
   const loadChatSession = (sessionId: string) => {
