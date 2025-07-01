@@ -95,7 +95,7 @@ export const ChatInterface = () => {
     resetTranscript,
   } = useSpeechRecognition();
 
-  // Function declarations moved here before usage
+  // Function declarations
   function createNewChat() {
     const newSession: ChatSession = {
       id: Date.now().toString(),
@@ -153,7 +153,7 @@ export const ChatInterface = () => {
     } else {
       localStorage.removeItem('chat-draft');
     }
-  });
+  }, 1000);
 
   // Keyboard shortcuts
   useKeyboardShortcuts({
@@ -422,36 +422,6 @@ export const ChatInterface = () => {
       }
       return msg;
     }));
-  };
-
-  const handleExportData = () => {
-    const chatSessions = localStorage.getItem('chat-sessions');
-    if (chatSessions) {
-      const blob = new Blob([chatSessions], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `devloom-chat-history-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Export Complete",
-        description: "Your chat history has been exported successfully.",
-      });
-    }
-  };
-
-  const toggleFullScreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullScreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullScreen(false);
-    }
   };
 
   const filteredSessions = chatSessions.filter(session =>
