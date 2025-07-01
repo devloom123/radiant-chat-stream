@@ -11,7 +11,7 @@ interface ChatInputProps {
   inputValue: string;
   setInputValue: (value: string) => void;
   selectedFiles: File[];
-  setSelectedFiles: (files: File[]) => void;
+  setSelectedFiles: React.Dispatch<React.SetStateAction<File[]>>;
   isLoading: boolean;
   isListening: boolean;
   speechSupported: boolean;
